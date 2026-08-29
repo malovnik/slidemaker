@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.Python
+.venv/
+venv/
+env/
+
+# Данные приложения
+web/uploads/
+web/generated/
+web/user_settings.json
+*_processed.png
+.env
+
+# Редакторы и ОС
+.idea/
+.vscode/
+.serena/
+.DS_Store
+Thumbs.db
+
+# Сборки
+dist/
+build/
+*.egg-info/

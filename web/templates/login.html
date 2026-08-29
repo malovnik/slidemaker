@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Генератор презентаций</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Playfair+Display:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #0a0a0b;
+            --bg-secondary: #141416;
+            --bg-elevated: #1a1a1e;
+            --text-primary: #e8e6e3;
+            --text-muted: #6b6b6f;
+            --accent: #c9a227;
+            --accent-dim: #8a7019;
+            --error: #d64545;
+            --border: #2a2a2e;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            font-family: 'Playfair Display', Georgia, serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Subtle noise texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Geometric accent lines */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 1px;
+            height: 120px;
+            background: linear-gradient(to bottom, var(--accent), transparent);
+            opacity: 0.4;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 400px;
+            padding: 48px 32px;
+            text-align: center;
+        }
+
+        .brand {
+            margin-bottom: 64px;
+        }
+
+        .brand-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 24px;
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .brand-icon::before {
+            content: '';
+            width: 20px;
+            height: 14px;
+            border: 2px solid var(--accent);
+            transform: skewX(-6deg);
+        }
+
+        .brand-title {
+            font-size: 1.5rem;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .brand-subtitle {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 500;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .pin-section {
+            margin-bottom: 32px;
+        }
+
+        .pin-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 500;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+
+        .pin-inputs {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .pin-digit {
+            width: 64px;
+            height: 80px;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-align: center;
+            caret-color: var(--accent);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            -webkit-appearance: none;
+            -moz-appearance: textfield;
+        }
+
+        .pin-digit::-webkit-outer-spin-button,
+        .pin-digit::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .pin-digit:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: var(--bg-elevated);
+            box-shadow: 0 0 0 4px rgba(201, 162, 39, 0.1);
+        }
+
+        .pin-digit.filled {
+            border-color: var(--accent-dim);
+        }
+
+        .pin-digit.error {
+            border-color: var(--error);
+            animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translateX(-1px); }
+            20%, 80% { transform: translateX(2px); }
+            30%, 50%, 70% { transform: translateX(-3px); }
+            40%, 60% { transform: translateX(3px); }
+        }
+
+        .error-message {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--error);
+            margin-top: 20px;
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: all 0.3s ease;
+        }
+
+        .error-message.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 40px 0;
+            color: var(--text-muted);
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .divider-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+
+        .footer-note {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+        }
+
+        /* Corner accents */
+        .corner {
+            position: fixed;
+            width: 32px;
+            height: 32px;
+            border-color: var(--border);
+            border-style: solid;
+            opacity: 0.5;
+        }
+
+        .corner--tl { top: 24px; left: 24px; border-width: 2px 0 0 2px; }
+        .corner--tr { top: 24px; right: 24px; border-width: 2px 2px 0 0; }
+        .corner--bl { bottom: 24px; left: 24px; border-width: 0 0 2px 2px; }
+        .corner--br { bottom: 24px; right: 24px; border-width: 0 2px 2px 0; }
+
+        /* Loading state */
+        .loading .pin-digit {
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 32px 24px;
+            }
+
+            .pin-digit {
+                width: 56px;
+                height: 70px;
+                font-size: 1.75rem;
+            }
+
+            .pin-inputs {
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="corner corner--tl"></div>
+    <div class="corner corner--tr"></div>
+    <div class="corner corner--bl"></div>
+    <div class="corner corner--br"></div>
+
+    <div class="container">
+        <header class="brand">
+            <div class="brand-icon"></div>
+            <h1 class="brand-title">Генератор презентаций</h1>
+            <p class="brand-subtitle">MD → PDF</p>
+        </header>
+
+        <form method="POST" id="pinForm">
+            <div class="pin-section">
+                <p class="pin-label">Введите код доступа</p>
+                <div class="pin-inputs">
+                    <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-index="0" autocomplete="off" autofocus>
+                    <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-index="1" autocomplete="off">
+                    <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-index="2" autocomplete="off">
+                    <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-index="3" autocomplete="off">
+                </div>
+                <input type="hidden" name="pin" id="pinValue">
+                <p class="error-message {% if error %}visible{% endif %}">{{ error if error else 'Неверный код' }}</p>
+            </div>
+        </form>
+
+        <div class="divider">
+            <span class="divider-text">Защищённый доступ</span>
+        </div>
+
+        <p class="footer-note">Markdown → Слайды → PDF</p>
+    </div>
+
+    <script>
+        const digits = document.querySelectorAll('.pin-digit');
+        const form = document.getElementById('pinForm');
+        const pinInput = document.getElementById('pinValue');
+        const errorMsg = document.querySelector('.error-message');
+
+        function updatePinValue() {
+            let pin = '';
+            digits.forEach(d => pin += d.value);
+            pinInput.value = pin;
+            return pin;
+        }
+
+        function focusNext(current, next) {
+            if (next && next < digits.length) {
+                digits[next].focus();
+            }
+        }
+
+        function focusPrev(current) {
+            if (current > 0) {
+                digits[current - 1].focus();
+            }
+        }
+
+        digits.forEach((digit, index) => {
+            digit.addEventListener('input', (e) => {
+                const value = e.target.value;
+
+                // Only allow digits
+                if (!/^\d*$/.test(value)) {
+                    e.target.value = '';
+                    return;
+                }
+
+                // Handle paste of multiple digits
+                if (value.length > 1) {
+                    const chars = value.split('');
+                    chars.forEach((char, i) => {
+                        if (index + i < digits.length && /^\d$/.test(char)) {
+                            digits[index + i].value = char;
+                            digits[index + i].classList.add('filled');
+                        }
+                    });
+                    const nextIndex = Math.min(index + chars.length, digits.length - 1);
+                    digits[nextIndex].focus();
+                } else {
+                    digit.classList.toggle('filled', value.length > 0);
+                    if (value.length === 1) {
+                        focusNext(index, index + 1);
+                    }
+                }
+
+                // Clear error state
+                errorMsg.classList.remove('visible');
+                digits.forEach(d => d.classList.remove('error'));
+
+                // Auto-submit when all digits filled
+                const pin = updatePinValue();
+                if (pin.length === 4) {
+                    setTimeout(() => {
+                        document.body.classList.add('loading');
+                        form.submit();
+                    }, 150);
+                }
+            });
+
+            digit.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace') {
+                    if (digit.value === '') {
+                        focusPrev(index);
+                    } else {
+                        digit.value = '';
+                        digit.classList.remove('filled');
+                    }
+                    updatePinValue();
+                    e.preventDefault();
+                } else if (e.key === 'ArrowLeft') {
+                    focusPrev(index);
+                } else if (e.key === 'ArrowRight') {
+                    focusNext(index, index + 1);
+                }
+            });
+
+            digit.addEventListener('focus', () => {
+                digit.select();
+            });
+
+            // Handle paste on any digit
+            digit.addEventListener('paste', (e) => {
+                e.preventDefault();
+                const paste = (e.clipboardData || window.clipboardData).getData('text');
+                const numbers = paste.replace(/\D/g, '').slice(0, 4);
+
+                numbers.split('').forEach((num, i) => {
+                    if (i < digits.length) {
+                        digits[i].value = num;
+                        digits[i].classList.add('filled');
+                    }
+                });
+
+                if (numbers.length > 0) {
+                    const focusIndex = Math.min(numbers.length, digits.length - 1);
+                    digits[focusIndex].focus();
+                }
+
+                const pin = updatePinValue();
+                if (pin.length === 4) {
+                    setTimeout(() => {
+                        document.body.classList.add('loading');
+                        form.submit();
+                    }, 150);
+                }
+            });
+        });
+
+        // Show error animation if error exists
+        {% if error %}
+        digits.forEach(d => d.classList.add('error'));
+        setTimeout(() => {
+            digits.forEach(d => {
+                d.value = '';
+                d.classList.remove('error', 'filled');
+            });
+            digits[0].focus();
+        }, 600);
+        {% endif %}
+    </script>
+</body>
+</html>

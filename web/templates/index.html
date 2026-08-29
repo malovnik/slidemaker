@@ -1,0 +1,506 @@
+{% extends "base.html" %}
+
+{% block title %}Генератор презентаций{% endblock %}
+
+{% block content %}
+<div class="app">
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon"></div>
+            <span class="logo-text">Генератор презентаций</span>
+        </div>
+        {% if auth_enabled %}<a href="/logout" class="logout-btn">Выйти</a>{% endif %}
+    </header>
+
+    <form id="generateForm" enctype="multipart/form-data">
+        <div class="main-grid">
+            <!-- Left column - Main content -->
+            <div class="main-content">
+                <!-- Format selector -->
+                <section class="section">
+                    <h2 class="section-title">Формат презентации</h2>
+                    <div class="format-selector">
+                        <button type="button" class="format-btn active" data-format="horizontal" data-tooltip="Для YouTube, десктопов">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="5" width="20" height="14" rx="2"/>
+                            </svg>
+                            16:9
+                        </button>
+                        <button type="button" class="format-btn" data-format="vertical" data-tooltip="Для Reels, Stories, TikTok">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="5" y="2" width="14" height="20" rx="2"/>
+                            </svg>
+                            9:16
+                        </button>
+                    </div>
+                    <input type="hidden" name="format" id="formatValue" value="horizontal">
+                </section>
+
+                <!-- Markdown upload -->
+                <section class="section">
+                    <h2 class="section-title">Markdown файл</h2>
+                    <div class="upload-zone" id="mdUpload">
+                        <div class="upload-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="12" y1="18" x2="12" y2="12"/>
+                                <line x1="9" y1="15" x2="15" y2="15"/>
+                            </svg>
+                        </div>
+                        <p class="upload-text">Перетащите файл или нажмите для выбора</p>
+                        <p class="upload-hint">.md, .markdown, .txt</p>
+                        <p class="upload-filename" id="mdFilename"></p>
+                        <input type="file" name="markdown" id="markdownFile" accept=".md,.markdown,.txt">
+                    </div>
+                </section>
+
+                <!-- Background selection - Single image with delete -->
+                <section class="section">
+                    <h2 class="section-title">Фоновое изображение</h2>
+                    <div class="bg-upload-container">
+                        <div class="bg-upload-zone" id="bgUploadZone">
+                            <div class="bg-upload-content">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                                    <polyline points="21 15 16 10 5 21"/>
+                                </svg>
+                                <p class="upload-text">Загрузить изображение</p>
+                                <p class="upload-hint">.png, .jpg, .jpeg</p>
+                            </div>
+                            <img class="bg-preview-img" id="bgPreviewImg" style="display: none;" alt="Background preview">
+                            <button type="button" class="bg-delete-btn" id="bgDeleteBtn" title="Удалить">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                            <div class="bg-change-hint" id="bgChangeHint">Нажмите, чтобы заменить</div>
+                            <input type="file" id="bgUploadInput" accept=".png,.jpg,.jpeg">
+                        </div>
+                    </div>
+                    <input type="hidden" name="background" id="backgroundValue" value="default">
+                </section>
+
+                <!-- Background effects -->
+                <section class="section">
+                    <h2 class="section-title">Эффекты фона</h2>
+                    <div class="form-group">
+                        <label class="form-label" data-tooltip="Помогает тексту читаться на ярком фоне">Эффект</label>
+                        <select class="form-select" name="bg_effect" id="bgEffect">
+                            <option value="none" {% if settings.bg_effect == 'none' %}selected{% endif %}>Без эффекта</option>
+                            <option value="lighten" {% if settings.bg_effect == 'lighten' %}selected{% endif %}>Осветление</option>
+                            <option value="darken" {% if settings.bg_effect == 'darken' %}selected{% endif %}>Затемнение</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="intensityGroup" style="display: {{ 'block' if settings.bg_effect != 'none' else 'none' }}">
+                        <label class="form-label">Интенсивность</label>
+                        <div class="range-group">
+                            <input type="range" class="range-slider" name="bg_effect_intensity" id="bgIntensity" min="1" max="10" value="{{ settings.bg_effect_intensity or 5 }}">
+                            <span class="range-value" id="intensityValue">{{ settings.bg_effect_intensity or 5 }}</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Generate -->
+                <div class="generate-section">
+                    <button type="submit" class="generate-btn" id="generateBtn" disabled>
+                        Сгенерировать презентацию
+                    </button>
+                    <div class="result" id="result">
+                        <p class="result-text" id="resultText"></p>
+                        <a href="#" class="download-btn" id="downloadBtn" style="display:none">Скачать</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Middle column - Live Preview -->
+            <div class="preview-column">
+                <div class="live-preview">
+                    <div class="live-preview-header">
+                        <span class="live-preview-title">Превью слайда</span>
+                        <span class="live-preview-slide-num" id="previewSlideNum">Слайд 1</span>
+                    </div>
+                    <div class="live-preview-canvas" id="previewCanvas">
+                        <div class="preview-bg" id="previewBg"></div>
+                        <div class="preview-overlay" id="previewOverlay"></div>
+                        <div class="preview-content">
+                            <div class="preview-heading" id="previewHeading">Заголовок слайда</div>
+                            <div class="preview-text" id="previewText">Это пример текста на слайде. Здесь будет отображаться ваш контент с выбранными настройками шрифта, цветов и эффектов.</div>
+                        </div>
+                    </div>
+                    <div class="live-preview-controls">
+                        <button type="button" class="preview-nav-btn" id="prevSlideBtn" disabled>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="15 18 9 12 15 6"/>
+                            </svg>
+                        </button>
+                        <button type="button" class="preview-nav-btn" id="nextSlideBtn" disabled>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <button type="button" class="instructions-btn" id="instructionsBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        Как подготовить файлы
+                    </button>
+                </div>
+
+                <!-- AI Agent Section -->
+                <div class="ai-agent-section">
+                    <div class="ai-agent-header">
+                        <div class="ai-agent-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/>
+                                <circle cx="8" cy="14" r="1"/>
+                                <circle cx="16" cy="14" r="1"/>
+                            </svg>
+                        </div>
+                        <div class="ai-agent-title">
+                            <span class="ai-agent-name">AI Подготовка</span>
+                            <span class="ai-agent-hint">GPT-4o-mini • Преобразует текст в презентацию</span>
+                        </div>
+                    </div>
+
+                    <div class="ai-upload-zone" id="aiUploadZone">
+                        <div class="ai-upload-content" id="aiUploadContent">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="12" y1="18" x2="12" y2="12"/>
+                                <line x1="9" y1="15" x2="15" y2="15"/>
+                            </svg>
+                            <p class="ai-upload-text">Загрузите сценарий или текст</p>
+                            <p class="ai-upload-hint">.txt, .md, .docx</p>
+                        </div>
+                        <div class="ai-processing" id="aiProcessing" style="display: none;">
+                            <div class="ai-spinner"></div>
+                            <p>AI обрабатывает текст...</p>
+                        </div>
+                        <input type="file" id="aiFileInput" accept=".txt,.md,.markdown,.docx">
+                    </div>
+
+                    <div class="ai-result" id="aiResult" style="display: none;">
+                        <div class="ai-result-header">
+                            <span class="ai-result-title">Готовый Markdown</span>
+                            <button type="button" class="ai-result-clear" id="aiClearBtn">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <pre class="ai-result-preview" id="aiResultPreview"></pre>
+                        <div class="ai-result-actions">
+                            <button type="button" class="ai-action-btn ai-download-btn" id="aiDownloadBtn">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                Скачать .txt
+                            </button>
+                            <button type="button" class="ai-action-btn ai-apply-btn" id="aiApplyBtn">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                Применить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right column - Settings sidebar -->
+            <aside class="sidebar">
+                <!-- Font settings with live preview -->
+                <div class="sidebar-card">
+                    <h3 class="sidebar-card-title">Шрифт</h3>
+                    <div class="form-group">
+                        <label class="form-label">Выберите шрифт</label>
+                        <div class="font-dropdown" id="fontDropdown">
+                            <div class="font-dropdown-trigger" id="fontDropdownTrigger">
+                                <span id="fontDropdownValue">{{ settings.font_name or fonts[0] if fonts else 'Выберите шрифт' }}</span>
+                                <svg class="font-dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </div>
+                            <div class="font-dropdown-menu" id="fontDropdownMenu">
+                                {% for font in fonts %}
+                                <div class="font-option {% if font == settings.font_name %}selected{% endif %}" data-font="{{ font }}">
+                                    <span class="font-option-name">{{ font }}</span>
+                                    <span class="font-option-preview" data-preview-font="{{ font }}">Пример текста Aa</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <input type="hidden" name="font_name" id="fontSelect" value="{{ settings.font_name or fonts[0] if fonts else '' }}">
+                    </div>
+                    <div class="upload-zone" id="fontUpload" style="padding: 16px;">
+                        <p class="upload-text" style="font-size: 0.7rem;">Загрузить свой шрифт</p>
+                        <p class="upload-hint">.ttf, .otf</p>
+                        <input type="file" id="fontFile" accept=".ttf,.otf">
+                    </div>
+                </div>
+
+                <!-- Heading colors -->
+                <div class="sidebar-card">
+                    <h3 class="sidebar-card-title">Заголовки</h3>
+                    <div class="form-group">
+                        <label class="form-label">Цвет</label>
+                        <div class="color-group">
+                            <div class="color-preview" id="headingColorPreview" style="background: #{{ settings.heading_color }}">
+                                <input type="color" id="headingColorPicker" value="#{{ settings.heading_color }}">
+                            </div>
+                            <input type="text" class="color-input" name="heading_color" id="headingColor" value="{{ settings.heading_color }}" maxlength="6" placeholder="1b1b1b">
+                        </div>
+                    </div>
+                    <div class="toggle-group">
+                        <span class="toggle-label">Градиент</span>
+                        <label class="toggle">
+                            <input type="checkbox" id="headingGradientToggle" {% if settings.heading_gradient == 'yes' %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <input type="hidden" name="heading_gradient" id="headingGradient" value="{{ settings.heading_gradient }}">
+                    <div class="gradient-settings {% if settings.heading_gradient == 'yes' %}open{% endif %}" id="headingGradientSettings">
+                        <div class="form-group" style="margin-top: 16px;">
+                            <label class="form-label">Конечный цвет</label>
+                            <div class="color-group">
+                                <div class="color-preview" id="headingGradientEndPreview" style="background: #{{ settings.heading_gradient_end }}">
+                                    <input type="color" id="headingGradientEndPicker" value="#{{ settings.heading_gradient_end }}">
+                                </div>
+                                <input type="text" class="color-input" name="heading_gradient_end" id="headingGradientEnd" value="{{ settings.heading_gradient_end }}" maxlength="6">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 16px;">
+                        <label class="form-label">Размер шрифта</label>
+                        <div class="range-group">
+                            <input type="range" class="range-slider" name="heading_font_size" id="headingFontSize" min="15" max="200" value="{{ settings.heading_font_size or 50 }}">
+                            <span class="range-value" id="headingFontSizeValue">{{ settings.heading_font_size or 50 }}</span>
+                            <button type="button" class="reset-btn" id="resetHeadingFontSize" title="Сбросить размер (50px)" data-default="50">↺</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ширина блока</label>
+                        <div class="range-group">
+                            <input type="range" class="range-slider" name="heading_width" id="headingWidth" min="30" max="120" value="{{ settings.heading_width or 90 }}">
+                            <span class="range-value" id="headingWidthValue">{{ settings.heading_width or 90 }}%</span>
+                            <button type="button" class="reset-btn" id="resetHeadingWidth" title="Сбросить ширину (90%)" data-default="90">↺</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Text colors -->
+                <div class="sidebar-card">
+                    <h3 class="sidebar-card-title">Текст</h3>
+                    <div class="form-group">
+                        <label class="form-label">Шрифт текста</label>
+                        <div class="font-dropdown" id="textFontDropdown">
+                            <div class="font-dropdown-trigger" id="textFontDropdownTrigger">
+                                <span id="textFontDropdownValue">{{ settings.text_font_name or 'Как у заголовка' }}</span>
+                                <svg class="font-dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </div>
+                            <div class="font-dropdown-menu" id="textFontDropdownMenu">
+                                <div class="font-option {% if not settings.text_font_name %}selected{% endif %}" data-font="">
+                                    <span class="font-option-name">Как у заголовка</span>
+                                </div>
+                                {% for font in fonts %}
+                                <div class="font-option {% if font == settings.text_font_name %}selected{% endif %}" data-font="{{ font }}">
+                                    <span class="font-option-name">{{ font }}</span>
+                                    <span class="font-option-preview" data-preview-font="{{ font }}">Пример текста</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <input type="hidden" name="text_font_name" id="textFontSelect" value="{{ settings.text_font_name or '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Цвет</label>
+                        <div class="color-group">
+                            <div class="color-preview" id="textColorPreview" style="background: #{{ settings.text_color }}">
+                                <input type="color" id="textColorPicker" value="#{{ settings.text_color }}">
+                            </div>
+                            <input type="text" class="color-input" name="text_color" id="textColor" value="{{ settings.text_color }}" maxlength="6" placeholder="1b1b1b">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Акцент (**bold**)</label>
+                        <div class="color-group">
+                            <div class="color-preview" id="accentColorPreview" style="background: #{{ settings.accent_color or 'ff6b6b' }}">
+                                <input type="color" id="accentColorPicker" value="#{{ settings.accent_color or 'ff6b6b' }}">
+                            </div>
+                            <input type="text" class="color-input" name="accent_color" id="accentColor" value="{{ settings.accent_color or 'ff6b6b' }}" maxlength="6" placeholder="ff6b6b">
+                        </div>
+                    </div>
+                    <div class="toggle-group">
+                        <span class="toggle-label">Градиент</span>
+                        <label class="toggle">
+                            <input type="checkbox" id="textGradientToggle" {% if settings.text_gradient == 'yes' %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <input type="hidden" name="text_gradient" id="textGradient" value="{{ settings.text_gradient }}">
+                    <div class="gradient-settings {% if settings.text_gradient == 'yes' %}open{% endif %}" id="textGradientSettings">
+                        <div class="form-group" style="margin-top: 16px;">
+                            <label class="form-label">Конечный цвет</label>
+                            <div class="color-group">
+                                <div class="color-preview" id="textGradientEndPreview" style="background: #{{ settings.text_gradient_end }}">
+                                    <input type="color" id="textGradientEndPicker" value="#{{ settings.text_gradient_end }}">
+                                </div>
+                                <input type="text" class="color-input" name="text_gradient_end" id="textGradientEnd" value="{{ settings.text_gradient_end }}" maxlength="6">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 16px;">
+                        <label class="form-label">Размер шрифта</label>
+                        <div class="range-group">
+                            <input type="range" class="range-slider" name="text_font_size" id="textFontSize" min="12" max="80" value="{{ settings.text_font_size or 36 }}">
+                            <span class="range-value" id="textFontSizeValue">{{ settings.text_font_size or 36 }}</span>
+                            <button type="button" class="reset-btn" id="resetTextFontSize" title="Сбросить размер (36px)" data-default="36">↺</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ширина блока</label>
+                        <div class="range-group">
+                            <input type="range" class="range-slider" name="text_width" id="textWidth" min="30" max="120" value="{{ settings.text_width or 85 }}">
+                            <span class="range-value" id="textWidthValue">{{ settings.text_width or 85 }}%</span>
+                            <button type="button" class="reset-btn" id="resetTextWidth" title="Сбросить ширину (85%)" data-default="85">↺</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export format -->
+                <div class="sidebar-card">
+                    <h3 class="sidebar-card-title">Формат экспорта</h3>
+                    <div class="export-format-selector">
+                        <button type="button" class="export-format-btn active" data-format="pdf">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                            PDF
+                        </button>
+                        <button type="button" class="export-format-btn" data-format="pptx">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                <line x1="12" y1="17" x2="12" y2="21"/>
+                            </svg>
+                            PPTX
+                        </button>
+                        <button type="button" class="export-format-btn" data-format="jpg">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            JPG
+                        </button>
+                    </div>
+                    <input type="hidden" name="export_format" id="exportFormat" value="pdf">
+                </div>
+            </aside>
+        </div>
+    </form>
+</div>
+
+<!-- Instructions Modal -->
+<div class="modal-overlay" id="instructionsModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Как подготовить файлы</h2>
+            <button type="button" class="modal-close" id="closeModal">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-section">
+                <h3 class="modal-section-title">Форматы файлов</h3>
+                <p>Принимаются файлы: <span class="modal-code">.md</span>, <span class="modal-code">.markdown</span>, <span class="modal-code">.txt</span></p>
+            </div>
+
+            <div class="modal-section">
+                <h3 class="modal-section-title">Структура документа</h3>
+                <ul>
+                    <li><span class="modal-code"># Заголовок</span> — создаёт новый слайд</li>
+                    <li><span class="modal-code">## Подзаголовок</span> — тоже создаёт слайд (используйте для разделов)</li>
+                    <li><span class="modal-code">- Пункт списка</span> — добавляет текст на слайд</li>
+                    <li>Обычный текст без маркеров игнорируется</li>
+                </ul>
+            </div>
+
+            <div class="modal-section">
+                <h3 class="modal-section-title">Рекомендации по контенту</h3>
+                <ul>
+                    <li><strong>Заголовок</strong> — краткий, ёмкий тезис (5-7 слов). Это ключевая мысль для зрителя</li>
+                    <li><strong>Пунктов</strong> — не более 3-4 на слайд, только самое важное</li>
+                    <li><strong>Подзаголовок ##</strong> — используйте для логических разделов или когда нужен слайд без списка</li>
+                </ul>
+            </div>
+
+            <div class="modal-section">
+                <h3 class="modal-section-title">Размеры изображений</h3>
+                <table class="sizes-table">
+                    <tr>
+                        <th>Формат</th>
+                        <th>Минимум</th>
+                        <th>Рекомендуемый</th>
+                    </tr>
+                    <tr>
+                        <td>16:9 (горизонтальный)</td>
+                        <td>1280×720</td>
+                        <td>1920×1080 или 2560×1440</td>
+                    </tr>
+                    <tr>
+                        <td>9:16 (вертикальный)</td>
+                        <td>720×1280</td>
+                        <td>1080×1920</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="modal-section">
+                <h3 class="modal-section-title">Промпт для ИИ</h3>
+                <p>Скопируйте и вставьте в ChatGPT/Claude вместе со сценарием:</p>
+                <div class="prompt-block">
+                    <button type="button" class="prompt-copy-btn" id="copyPromptBtn">Копировать</button>
+                    <pre class="prompt-text" id="promptText">Преобразуй этот сценарий видео в Markdown файл для презентации.
+
+Правила форматирования:
+1. Каждый смысловой блок = один слайд с заголовком #
+2. Заголовок — краткий тезис из 5-7 слов, суть мысли для зрителя
+3. Под заголовком 2-4 пункта через "- " (тире и пробел)
+4. Пункты — только ключевые факты, цифры, действия
+5. Используй ## для разделов или слайдов без списка
+6. Никакого лишнего текста, только # заголовки и - пункты
+
+Пример структуры:
+# Почему это важно
+- Первый ключевой факт
+- Второй ключевой факт
+- Призыв к действию
+
+## Следующий раздел
+- Пункт раздела
+
+Сценарий:
+[ВСТАВЬ СЦЕНАРИЙ СЮДА]</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
